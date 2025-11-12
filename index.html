@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Linked List Concatenation — Live Playlist Demo</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--glass: rgba(255,255,255,0.03)}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071226 0%, #071a2a 100%);color:#e6eef8}
+    .app{max-width:1100px;margin:28px auto;padding:22px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    .subtitle{color:var(--muted);font-size:13px}
+
+    .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+    .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    .card h2{margin:0 0 10px 0;font-size:15px}
+    .list{min-height:220px;padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border:1px solid rgba(255,255,255,0.02)}
+
+    .song{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;margin-bottom:8px;background:var(--glass);border:1px solid rgba(255,255,255,0.03)}
+    .song .index{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;background:rgba(255,255,255,0.03);font-weight:700}
+    .song .title{flex:1}
+    .song .meta{color:var(--muted);font-size:12px}
+    .controls{display:flex;gap:8px;margin-top:10px}
+    .btn{background:linear-gradient(180deg,var(--accent),#2b6cb0);padding:8px 12px;border-radius:8px;color:white;border:0;cursor:pointer}
+
+    .small{padding:6px 8px;font-size:13px}
+    input.song-input{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+
+    .play-area{display:flex;flex-direction:column;gap:10px;align-items:stretch}
+    .timeline{display:flex;gap:10px;flex-wrap:wrap}
+
+    /* animation helpers */
+    .moving{position:fixed;z-index:9999;pointer-events:none;transition:transform 400ms ease, opacity 300ms}
+    .highlight{box-shadow:0 6px 20px rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.25)}
+
+    footer{margin-top:16px;color:var(--muted);font-size:13px}
+
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Linked List Concatenate — Live Playlist Demo</h1>
+        <div class="subtitle">Type two sets of songs (4 each by default). Click "Concatenate" to merge them into a new playlist — watch pointers move!</div>
+      </div>
+      <div>
+        <button id="resetBtn" class="btn small">Reset</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>List A (Playlist 1)</h2>
+        <div id="listA" class="list"></div>
+        <div class="controls">
+          <button id="addA" class="btn small">Add Song</button>
+          <button id="shuffleA" class="btn small">Shuffle</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>List B (Playlist 2)</h2>
+        <div id="listB" class="list"></div>
+        <div class="controls">
+          <button id="addB" class="btn small">Add Song</button>
+          <button id="shuffleB" class="btn small">Shuffle</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Result — Concatenated Playlist</h2>
+        <div id="result" class="list play-area"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="concatBtn" class="btn">Concatenate</button>
+          <button id="autoBtn" class="btn small">Auto-Concat (step)</button>
+          <button id="playBtn" class="btn small">Simulate Play</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>Presentation tip: press <strong>Auto-Concat</strong> to move nodes one-by-one with animation while you narrate pointer changes.</footer>
+  </div>
+
+  <script>
+    // Simple linked-list-like UI. No actual pointers; we visually animate nodes joining.
+    const defaultsA = ['Wake Up','Sunrise','Easy Morning','Coffee Beats']
+    const defaultsB = ['Drive','Nightfall','Deep Focus','Late Night']
+
+    const listA = document.getElementById('listA')
+    const listB = document.getElementById('listB')
+    const result = document.getElementById('result')
+    const concatBtn = document.getElementById('concatBtn')
+    const autoBtn = document.getElementById('autoBtn')
+    const playBtn = document.getElementById('playBtn')
+    const addA = document.getElementById('addA')
+    const addB = document.getElementById('addB')
+    const shuffleA = document.getElementById('shuffleA')
+    const shuffleB = document.getElementById('shuffleB')
+    const resetBtn = document.getElementById('resetBtn')
+
+    function makeSongEl(title, idx){
+      const el = document.createElement('div')
+      el.className = 'song'
+      el.innerHTML = `<div class="index">${idx}</div><div class="title"><input class="song-input" value="${escapeHtml(title)}"></div><div class="meta">Node</div>`
+      return el
+    }
+
+    function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+    function render(){
+      listA.innerHTML = ''
+      listB.innerHTML = ''
+      result.innerHTML = ''
+      defaultsA.forEach((t,i)=> listA.appendChild(makeSongEl(t,i+1)))
+      defaultsB.forEach((t,i)=> listB.appendChild(makeSongEl(t,i+1)))
+    }
+
+    // Add song
+    addA.onclick = ()=>{defaultsA.push('New Song'); render()}
+    addB.onclick = ()=>{defaultsB.push('New Song'); render()}
+
+    // shuffle
+    function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}}
+    shuffleA.onclick = ()=>{shuffle(defaultsA); render()}
+    shuffleB.onclick = ()=>{shuffle(defaultsB); render()}
+
+    // Concatenate instantly
+    concatBtn.onclick = ()=>{
+      // read current names from inputs (in case user edited)
+      const aNames = Array.from(listA.querySelectorAll('.song-input')).map(i=>i.value||'Untitled')
+      const bNames = Array.from(listB.querySelectorAll('.song-input')).map(i=>i.value||'Untitled')
+      const merged = [...aNames,...bNames]
+      result.innerHTML = ''
+      merged.forEach((t,i)=>{
+        const el = document.createElement('div')
+        el.className='song highlight'
+        el.innerHTML = `<div class="index">${i+1}</div><div class="title">${escapeHtml(t)}</div><div class="meta">Node</div>`
+        result.appendChild(el)
+      })
+    }
+
+    // Auto-concatenate with animation (move nodes one-by-one)
+    autoBtn.onclick = async ()=>{
+      // read names and source elements
+      const aEls = Array.from(listA.querySelectorAll('.song'))
+      const bEls = Array.from(listB.querySelectorAll('.song'))
+      const sources = [...aEls,...bEls]
+      result.innerHTML = ''
+      concatBtn.disabled = true
+      autoBtn.disabled = true
+      // animate each source -> copy to result
+      for(let i=0;i<sources.length;i++){
+        const src = sources[i]
+        await animateMove(src, i+1)
+      }
+      concatBtn.disabled = false
+      autoBtn.disabled = false
+    }
+
+    function animateMove(srcEl, newIndex){
+      return new Promise(resolve=>{
+        const rect = srcEl.getBoundingClientRect()
+        const clone = srcEl.cloneNode(true)
+        clone.style.position='fixed'
+        clone.style.left=rect.left+'px'
+        clone.style.top=rect.top+'px'
+        clone.style.width=rect.width+'px'
+        clone.style.opacity=1
+        clone.classList.add('moving')
+        document.body.appendChild(clone)
+
+        // compute destination (append placeholder to result to get coords)
+        const placeholder = document.createElement('div')
+        placeholder.className='song'
+        placeholder.style.visibility='hidden'
+        placeholder.innerHTML = `<div class="index">${newIndex}</div><div class="title">...</div><div class="meta">Node</div>`
+        result.appendChild(placeholder)
+        const destRect = placeholder.getBoundingClientRect()
+
+        // animate transform
+        const dx = destRect.left - rect.left
+        const dy = destRect.top - rect.top
+        requestAnimationFrame(()=>{
+          clone.style.transform = `translate(${dx}px, ${dy}px) scale(0.98)`
+          clone.style.opacity = '0.98'
+        })
+
+        setTimeout(()=>{
+          // replace placeholder with real element
+          placeholder.style.visibility='visible'
+          placeholder.innerHTML = srcEl.innerHTML.replace(/<input[^>]*>/, function(){
+            // take current input value
+            const val = srcEl.querySelector('.song-input')?.value || 'Untitled'
+            return `<div class="title">${escapeHtml(val)}</div>`
+          })
+          placeholder.classList.add('highlight')
+          clone.remove()
+          // small pulse
+          setTimeout(()=>placeholder.classList.remove('highlight'),600)
+          resolve()
+        },450)
+      })
+    }
+
+    // Simulate play (highlight nodes sequentially)
+    let playing=false
+    playBtn.onclick = ()=>{
+      if(playing){playing=false; playBtn.textContent='Simulate Play'; return}
+      playing=true; playBtn.textContent='Stop'
+      const nodes = Array.from(result.querySelectorAll('.song'))
+      if(nodes.length===0){playing=false; playBtn.textContent='Simulate Play';return}
+      let idx=0
+      const iv = setInterval(()=>{
+        if(!playing || idx>=nodes.length){clearInterval(iv);playing=false;playBtn.textContent='Simulate Play';return}
+        nodes.forEach(n=>n.classList.remove('highlight'))
+        nodes[idx].classList.add('highlight')
+        idx++
+      },800)
+    }
+
+    // reset
+    resetBtn.onclick = ()=>{defaultsA.splice(0,defaultsA.length,...['Wake Up','Sunrise','Easy Morning','Coffee Beats']);defaultsB.splice(0,defaultsB.length,...['Drive','Nightfall','Deep Focus','Late Night']);render()}
+
+    // init
+    render()
+  </script>
+</body>
+</html>
